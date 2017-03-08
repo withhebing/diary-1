@@ -1,10 +1,10 @@
 module.exports = {
   author: {
-    name: "Joyee Cheung",
-    url: "https://github.com/joyeecheung"
+    name: "withhebing",
+    url: "https://github.com/withhebing"
   },
   repo: {  // for the markdown source
-    content: "https://github.com/joyeecheung/my-tech-diary",
+    content: "https://github.com/withhebing/diary",
     as_submodule: 'diary'
   },
   base_url: '/diary',  // remote directory for the website
