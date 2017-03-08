@@ -1,0 +1,181 @@
+<!DOCTYPE html><!--[if lte IE 8]>
+<html lang="en" class="lte-ie8">
+<![endif]-->
+<!--[if gt IE 8]><!-->
+<html lang="en">
+<!--<![endif]--><head><meta charset="utf-8"><title>2017-03-02 闭包是什么?</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/diary/styles/global.css"><link rel="stylesheet" href="/diary/styles/tomorrow.css"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-63818301-1', 'auto');
+ga('send', 'pageview');</script></head><body><div class="content"><h3 id="-">闭包是什么</h3>
+<blockquote>
+<p>转自 <a href="https://www.zhihu.com/question/24084277/answer/110176733">https://www.zhihu.com/question/24084277/answer/110176733</a></p>
+</blockquote>
+<h5 id="-combinator-">组合子（Combinator）</h5>
+<p>普通我们常说的一个“函数”，比如：</p>
+<blockquote>
+<p>f(x,y)=x+y</p>
+</blockquote>
+<p>函数有两个“自变量”（术语：约束变量），x和y。函数的返回值，也就是应变量，是自变量一系列操作的结果。比如例子里是返回x和y的和。这样的一个它内部操作依赖的变量全部由参数提供了的”自给自足“的函数，叫“组合子（Combinator）”。</p>
+<p><img src="https://pic1.zhimg.com/d1cbf0bff34eb6099a732c986af57e54_b.png" alt=""></p>
+<p>用Java代码表示就是：</p>
+<pre><code class="lang-Java"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">add</span><span class="hljs-params">(<span class="hljs-keyword">int</span> x, <span class="hljs-keyword">int</span> y)</span></span>{
+    <span class="hljs-keyword">return</span> x+y;
+}
+</code></pre>
+<p>换到编程的概念，强调的就是函数的“作用域”。大多数编程语言都是用一对花括号“{}”标识出作用域。上面代码里的add()函数被调用之后，
+<strong>int sum=add(2,3);</strong>
+编译器编译之后，可以理解成是这个样子，函数的参数x和y，是包含在函数add()的作用域里的。</p>
+<pre><code class="lang-Java">add(){
+    <span class="hljs-keyword">int</span> x=<span class="hljs-number">2</span>;
+    <span class="hljs-keyword">int</span> y=<span class="hljs-number">3</span>;
+    <span class="hljs-keyword">return</span> x+y;
+}
+</code></pre>
+<p>或者呢，函数像下面这样写也可以。这时候x作为函数参数出现，而y作为函数局部变量出现。效果和上面的例子是一样的。</p>
+<pre><code class="lang-Java"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">add</span><span class="hljs-params">(<span class="hljs-keyword">int</span> x)</span></span>{
+    <span class="hljs-keyword">int</span> y=<span class="hljs-number">3</span>;
+    <span class="hljs-keyword">return</span> x+y;
+}
+</code></pre>
+<h5 id="-">自由变量</h5>
+<p>但有的时候，函数也可以有它自身作用域以外的参数参与。这些在函数作用域以外，由函数的外部环境提供的参数就叫“<strong>自由变量 (Free Variable)</strong>”。
+比如下面这个函数，</p>
+<blockquote>
+<p>f(x)=x+y</p>
+</blockquote>
+<p>写成代码就是这样，</p>
+<pre><code class="lang-Java"><span class="hljs-keyword">int</span> y=<span class="hljs-number">3</span>;
+add(){
+    <span class="hljs-keyword">int</span> x=<span class="hljs-number">2</span>;
+    <span class="hljs-keyword">return</span> x+y;
+}
+</code></pre>
+<p><img src="https://pic1.zhimg.com/b18687f4e7cc54bf9a8318c3c8df672c_b.png" alt=""></p>
+<h5 id="-closure-">闭包（Closure）</h5>
+<p>知道了什么是自由变量，那什么是闭包？</p>
+<p>简单讲，就三句话：</p>
+<ul>
+<li>第一，一个依赖于自由变量的函数</li>
+<li>第二，处在含有这些自由变量的一个外围环境</li>
+<li>第三，这个函数能够访问外围环境里的自由变量</li>
+</ul>
+<p>看下面这个Javascript闭包的例子：</p>
+<pre><code class="lang-Java"><span class="hljs-function">function <span class="hljs-title">Add</span><span class="hljs-params">(y)</span> </span>{  
+    <span class="hljs-keyword">return</span> function(x) {  
+        <span class="hljs-keyword">return</span> x + y  
+    }  
+}
+
+var addFive = AddWith(<span class="hljs-number">5</span>)  
+var seven = addFive(<span class="hljs-number">2</span>) <span class="hljs-comment">// 2+5=7</span>
+</code></pre>
+<p>对内部函数function(x)来讲，y就是自由变量，而且function(x)的返回值，依赖于这个外部自由变量y。而往上推一层，外围Add(y)函数正好就是那个包含自由变量y的环境。而且Javascript的语法允许内部函数function(x)访问外部函数Add(y)的局部变量。满足这三个条件，所以这个时候，外部函数Add(y)对内部函数function(x)构成了闭包。</p>
+<p>闭包的结构，如果用λ演算表达式来写，就是多参数的Currying技术。</p>
+<blockquote>
+<p>λx.λy.x+y</p>
+</blockquote>
+<p>但在Java中我们看不到这样的结构。因为Java主流语法不允许这样的直接的函数套嵌和跨域访问变量。</p>
+<h5 id="-">类和对象</h5>
+<p>但Java中真的不存在闭包吗？正好相反，Java到处都是闭包，所以反而我们感觉不出来在使用闭包。因为Java的“对象”其实就是一个闭包。其实无论是闭包也好，对象也好，都是一种数据封装的手段。看下面这个类，</p>
+<pre><code class="lang-Java"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Add</span></span>{
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> x=<span class="hljs-number">2</span>;
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">add</span><span class="hljs-params">()</span></span>{
+        <span class="hljs-keyword">int</span> y=<span class="hljs-number">3</span>;
+        <span class="hljs-keyword">return</span> x+y;
+    }
+}
+</code></pre>
+<p>看上去x在函数add()的作用域外面，但是通过Add类实例化的过程，变量”x“和数值”2“之间已经绑定了，而且和函数add()也已经打包在一起。add()函数其实是透过this关键字来访问对象的成员字段的。</p>
+<h5 id="java-">Java中的闭包</h5>
+<p>那Java中有没有除了类和对象以外的闭包？当然有。</p>
+<h5 id="-">内部类是闭包：包含指向外部类的指针</h5>
+<p>Java中的内部类就是一个典型的闭包结构。代码如下</p>
+<pre><code class="lang-Java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Outer</span> </span>{
+    <span class="hljs-keyword">private</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Inner</span></span>{
+        <span class="hljs-keyword">private</span> y=<span class="hljs-number">100</span>;
+        <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">innerAdd</span><span class="hljs-params">()</span></span>{
+            <span class="hljs-keyword">return</span> x+y;
+        }
+    }
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> x=<span class="hljs-number">100</span>;
+}
+</code></pre>
+<p><img src="https://pic2.zhimg.com/a5fc0f99e8cb53266ccc783f2c26949d_b.png" alt="">
+上图显示的就是上边代码的结构，，内部类（Inner Class）通过包含一个指向外部类的引用（指针），做到自由访问外部环境类的所有字段，变相把环境中的自由变量封装到函数里，形成一个闭包。</p>
+<h5 id="-">别扭的匿名内部类</h5>
+<p>但Java匿名内部类就做得比较尴尬。下面这个例子中，getAnnoInner负责返回一个匿名内部类的引用。</p>
+<pre><code class="lang-Java"><span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">AnnoInner</span>()</span>{addXYZ();}
+<span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Outer</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> AnnoInner <span class="hljs-title">getAnnoInner</span><span class="hljs-params">(<span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> x)</span></span>{
+        <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> y=<span class="hljs-number">100</span>;
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> AnnoInner(){
+            <span class="hljs-keyword">int</span> z=<span class="hljs-number">100</span>;
+            <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">addXYZ</span><span class="hljs-params">()</span></span>{<span class="hljs-keyword">return</span> x+y+z;}
+            <span class="hljs-comment">//public void changeY(){y+=1;}    //这个函数无法修改外部环境中的自由变量y。</span>
+        };
+    }
+
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> num=<span class="hljs-number">100</span>;
+}
+</code></pre>
+<p>匿名内部类因为是匿名，所以不能显式地声明构造函数，也不能往构造函数里传参数。不但返回的只是个叫AnnoInner的接口，而且还没有和它外围环境getAnnoInner()方法的局部变量x和y构成任何类的结构。但它的addXYZ()函数却直接使用了x和y这两个自由变量来计算结果。这就说明，外部方法getAnnoInner()事实上已经对内部类AnnoInner构成了一个闭包。</p>
+<p>但这里别扭的地方是这两个x和y都必须用final修饰，不可以修改。如果用一个changeY()函数试图修改外部getAnnoInner()函数的成员变量y，编译器通不过，</p>
+<pre><code>error: cannot assign <span class="hljs-operator">a</span> <span class="hljs-built_in">value</span> <span class="hljs-built_in">to</span> final <span class="hljs-built_in">variable</span> y
+</code></pre><p>这是为什么呢？因为这里Java编译器支持了闭包，但支持地不完整。说支持了闭包，是因为编译器编译的时候其实悄悄对函数做了手脚，偷偷把外部环境方法的x和y局部变量，拷贝了一份到匿名内部类里。如下面的代码所示。</p>
+<pre><code class="lang-Java"><span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">AnnoInner</span>()</span>{addXYZ();}
+<span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Outer</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> AnnoInner <span class="hljs-title">getAnnoInner</span><span class="hljs-params">(<span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> x)</span></span>{
+        <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> y=<span class="hljs-number">100</span>;
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> AnnoInner(){
+            <span class="hljs-keyword">int</span> copyX=x;    <span class="hljs-comment">//编译器相当于拷贝了外部自由变量x的一个副本到匿名内部类里。</span>
+            <span class="hljs-keyword">int</span> copyY=y;    <span class="hljs-comment">//编译器相当于拷贝了外部自由变量y的一个副本到匿名内部类里。</span>
+            <span class="hljs-keyword">int</span> z=<span class="hljs-number">100</span>;
+            <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">addXYZ</span><span class="hljs-params">()</span></span>{<span class="hljs-keyword">return</span> x+y+z;}
+            <span class="hljs-comment">//public void changeY(){y+=1;}    //这个函数无法修改外部环境中的自由变量y。</span>
+        };
+    }
+
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> num=<span class="hljs-number">100</span>;
+}
+</code></pre>
+<p>所以<strong>编译器实现的只是capture-by-value，并没有实现capture-by-reference</strong>。而只有后者才能保持匿名内部类和外部环境局部变量保持同步。</p>
+<p>但Java又要立牌坊，不明着告诉大家自己只实现了capture-by-value。为了以后语言能进一步扩展成支持capture-by-reference留下后路，所以现在干脆不允许向捕获的变量赋值，而且可以捕获的也只有“效果上不可变”（effectively final）的参数/局部变量。</p>
+<h5 id="-">其他和匿名内部类相似的结构</h5>
+<p>《Think in Java》书里，只点出了匿名内部类来自外部闭包环境的自由变量必须是final的。但实际上，其他几种不太常用的内部类形式，也都有这个特性。</p>
+<p>比如在外部类成员方法内部的内部类。</p>
+<pre><code class="lang-Java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Outer</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">foo</span><span class="hljs-params">(<span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> x)</span></span>{
+        <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> y=<span class="hljs-number">100</span>;
+        <span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">MethodInner</span></span>{
+            <span class="hljs-keyword">int</span> z=<span class="hljs-number">100</span>;
+            <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">addXYZ</span><span class="hljs-params">()</span></span>{<span class="hljs-keyword">return</span> x+y+z;}
+        }
+    }
+}
+</code></pre>
+<p>比如在一个代码块block里的内部类。</p>
+<pre><code class="lang-Java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Outer</span> </span>{
+    {
+        <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> x=<span class="hljs-number">100</span>;
+        <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> y=<span class="hljs-number">100</span>;
+        <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">BlockInner</span></span>{
+            <span class="hljs-keyword">int</span> z=<span class="hljs-number">100</span>;
+            <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">addXYZ</span><span class="hljs-params">()</span></span>{<span class="hljs-keyword">return</span> x+y+z;}
+        }
+        BlockInner bi=<span class="hljs-keyword">new</span> BlockInner();
+        num=bi.addXYZ();
+    }
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> num;
+}
+</code></pre>
+<h5 id="-capture-by-reference-">闭包capture-by-reference的难处？</h5>
+<p>Java这么多年都没有改变这个特性，其中的水一定很深。留着当一个思考题吧。</p>
+<h4 id="-">彩蛋</h4>
+<p><img src="https://pic4.zhimg.com/20654942cb00c88356695f7d9bc8009b_b.jpg" alt="">
+这张图，懂的人，自然懂。</p>
+<h6 id="-">参考文献</h6>
+<p><a href="http://rednaxelafx.iteye.com/blog/245022">关于对象与闭包的关系的一个有趣小故事 （这篇的精华在后面的回复，小故事可以跳过）</a><br><a href="https://www.zhihu.com/question/27416568/answer/36565794">JVM的规范中允许编程语言语义中创建闭包(closure)吗？ - RednaxelaFX 的回答</a><br><a href="https://www.zhihu.com/question/28190927/answer/39786939">为什么Java闭包不能通过返回值之外的方式向外传递值？ - RednaxelaFX 的回答</a><br><a href="https://www.ibm.com/developerworks/cn/linux/l-cn-closure/">闭包的概念、形式与应用</a><br><a href="http://cuipengfei.me/blog/2013/06/22/why-does-it-have-to-be-final/">《为什么必须是final的呢？》</a></p>
+</div><footer class="footer"><address class="author">Copyright &copy;<a rel="author" href="https://github.com/withhebing" class="author-name">withhebing</a>-<a href="https://github.com/withhebing/diary" class="source-repo">Source</a></address><p>Generated by<a href="https://github.com/joyeecheung/diary" class="site-repo">Joyee Cheung&#39;s diary generator</a></p></footer></body></html>

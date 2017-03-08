@@ -1,0 +1,138 @@
+<!DOCTYPE html><!--[if lte IE 8]>
+<html lang="en" class="lte-ie8">
+<![endif]-->
+<!--[if gt IE 8]><!-->
+<html lang="en">
+<!--<![endif]--><head><meta charset="utf-8"><title>2016-08-02 CoreImage -- photoEffect</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/diary/styles/global.css"><link rel="stylesheet" href="/diary/styles/tomorrow.css"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-63818301-1', 'auto');
+ga('send', 'pageview');</script></head><body><div class="content"><h2 id="core-image-ciphotoeffect-">Core Image 的简单使用之一 -- 图片滤镜(以CIPhotoEffect..为例)</h2>
+<h3 id="core-image-">Core Image 概述</h3>
+<blockquote>
+<p>Core Image is an image processing and analysis technology designed to provide near real-time processing for still and video images. It operates on image data types from the Core Graphics, Core Video, and Image I/O frameworks, using either a GPU or CPU rendering path. Core Image hides the details of low-level graphics processing by providing an easy-to-use application programming interface (API). You don’t need to know the details of OpenGL or OpenGL ES to leverage the power of the GPU, nor do you need to know anything about Grand Central Dispatch (GCD) to get the benefit of multicore processing. Core Image handles the details for you.<a href="https://developer.apple.com/library/ios/documentation/GraphicsImaging/Conceptual/CoreImaging/ci_intro/ci_intro.html#//apple_ref/doc/uid/TP30001185" title="Core Image Programming Guide">1</a></p>
+</blockquote>
+<p>CoreImage是iOS5新加入的一个图像处理框架, 提供了强大高效的图像处理功能, 用来对基于像素的图像进行操作与分析.<br>内置了很多强大的滤镜(Filter), 这些Filter提供了各种各样的效果, 并且还可以通过<code>滤镜链</code>将各种效果的Filter<code>叠加</code>起来形成强大的自定义效果.</p>
+<h3 id="core-image-2-">Core Image 架构 <a href="https://objccn.io/issue-21-6/" title="Core Image 介绍">2</a></h3>
+<p>Core Image 有一个插件架构, 这意味着它允许用户编写自定义的滤镜并与系统提供的滤镜集成来扩展其功能. 此处不会用到 Core Image 的可扩展性, 提到它只是因为它影响到了框架的 API.  </p>
+<p>Core Image 是用来最大化利用其所运行之上的硬件的. 每个滤镜实际上的实现, 即内核, 是由一个 GLSL (即 OpenGL 的着色语言) 的子集来书写的. 当多个滤镜连接成一个滤镜图表, Core Image 便把内核串在一起来构建一个可在 GPU 上运行的高效程序.  </p>
+<p>只要有可能, Core Image 都会把工作延迟. 通常情况下, 直到滤镜图表的最后一个滤镜的输出被请求之前都不会发生分配或处理.  </p>
+<p>为了完成工作, Core Image 需要一个称为上下文 (context) 的对象. 这个上下文是框架真正工作的地方, 它需要分配必要的内存, 并编译和运行滤镜内核来执行图像处理. 建立一个上下文是非常耗费性能的的, 所以要尽可能考虑到重用.</p>
+<h3 id="-ciphotoeffect-">图片滤镜(以CIPhotoEffect..为例)</h3>
+<p>思路: originalUIImage -&gt; inputCIImage -&gt; (CIFilter) -&gt; outputCIImage -&gt; (CIContext) -&gt; CGImage -&gt; UIImage</p>
+<p>三个主要对象:</p>
+<ul>
+<li>CIImage -- 保存图像数据. 它可以从UIImage, 图像文件, 或像素数据中构造.</li>
+<li>CIFilter -- 包含的字典对各种滤镜定义了各自的属性. 滤镜有很多种，比如裁剪/色彩/模糊/像素等.<ul>
+<li><code>由于CoreImage的插件结构, 大多数滤镜属性并不是直接设置的, 而是通过键值编码(KVC)设置</code></li>
+</ul>
+</li>
+<li>CIContext -- 图像处理都是在CIContext中完成的.
+为了完成工作, CoreImage需要一个称为上下文(context)的对象. 这个上下文是框架真正工作的地方, 它需要分配必要的内存, 并编译和运行滤镜内核来执行图像处理.<ul>
+<li><code>创建一个上下文(context)是非常耗性能的, 应重复使用.</code></li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-objc"><span class="hljs-comment">/// 传入滤镜名称(e.g. @"CIPhotoEffectFade"), 输出处理后的图片</span>
+- (<span class="hljs-built_in">UIImage</span> *)outputImageWithFilterName:(<span class="hljs-built_in">NSString</span> *)filterName {
+    <span class="hljs-comment">// 1.</span>
+    <span class="hljs-comment">// 将UIImage转换成CIImage</span>
+<span class="hljs-comment">//    CIImage *ciImage = self.originalImage.CIImage; // 未分配内存空间</span>
+    <span class="hljs-built_in">CIImage</span> *ciImage = [[<span class="hljs-built_in">CIImage</span> alloc] initWithImage:<span class="hljs-keyword">self</span><span class="hljs-variable">.originalImage</span>];
+    <span class="hljs-comment">// 创建滤镜</span>
+    <span class="hljs-keyword">self</span><span class="hljs-variable">.filter</span> = [<span class="hljs-built_in">CIFilter</span> filterWithName:filterName keysAndValues:k<span class="hljs-built_in">CIInputImageKey</span>, ciImage, <span class="hljs-literal">nil</span>];
+
+    <span class="hljs-comment">// 2.</span>
+    <span class="hljs-comment">// 渲染并输出CIImage</span>
+    <span class="hljs-built_in">CIImage</span> *outputImage = [<span class="hljs-keyword">self</span><span class="hljs-variable">.filter</span> outputImage];
+
+    <span class="hljs-comment">// 3.</span>
+    <span class="hljs-comment">// 获取绘制上下文</span>
+    <span class="hljs-keyword">self</span><span class="hljs-variable">.context</span> = [<span class="hljs-built_in">CIContext</span> contextWithOptions:<span class="hljs-literal">nil</span>];
+    <span class="hljs-comment">// 创建CGImage</span>
+    <span class="hljs-built_in">CGImageRef</span> cgImage = [<span class="hljs-keyword">self</span><span class="hljs-variable">.context</span> create<span class="hljs-built_in">CGImage</span>:outputImage fromRect:[outputImage extent]];
+    <span class="hljs-comment">// 获取图片 (不要直接`imageWithCIImage:`, CIContext重复, 性能)</span>
+    <span class="hljs-built_in">UIImage</span> *image = [<span class="hljs-built_in">UIImage</span> imageWith<span class="hljs-built_in">CGImage</span>:cgImage];
+    <span class="hljs-comment">// 释放CGImage</span>
+    <span class="hljs-built_in">CGImageRelease</span>(cgImage);
+
+    <span class="hljs-keyword">return</span> image;
+}
+</code></pre>
+<p>CoreImage提供的滤镜很多, 不便记忆. 可通过<code>打印</code>或<code>po filter.attributes</code>方式查看相应信息.</p>
+<pre><code class="lang-objc"><span class="hljs-comment">// 打印滤镜名称</span>
+<span class="hljs-comment">// `kCICategoryBuiltIn`内置; `kCICategoryColorEffect`色彩</span>
+- (<span class="hljs-keyword">void</span>)showFilters {
+    <span class="hljs-built_in">NSArray</span> *filterNames = [<span class="hljs-built_in">CIFilter</span> filterNamesInCategory:k<span class="hljs-built_in">CICategoryColorEffect</span>];
+    <span class="hljs-keyword">for</span> (<span class="hljs-built_in">NSString</span> *filterName <span class="hljs-keyword">in</span> filterNames) {
+        <span class="hljs-built_in">NSLog</span>(<span class="hljs-string">@"%@"</span>, filterName);
+        <span class="hljs-comment">// CIFilter *filter = [CIFilter filterWithName:filterName];</span>
+        <span class="hljs-comment">// NSDictionary *attributes = filter.attributes;</span>
+        <span class="hljs-comment">// NSLog(@"%@", attributes); // 查看属性</span>
+    }
+}
+</code></pre>
+<pre><code class="lang-objc"><span class="hljs-comment">// 自动调整样式</span>
+- (<span class="hljs-built_in">UIImage</span> *)photoEffectAutoAdjust {
+    <span class="hljs-built_in">CIImage</span> *ciImage = [[<span class="hljs-built_in">CIImage</span> alloc] initWithImage:<span class="hljs-keyword">self</span><span class="hljs-variable">.filterlessImage</span>];
+    <span class="hljs-built_in">NSArray</span> *filters = [ciImage autoAdjustmentFiltersWithOptions:<span class="hljs-literal">nil</span>];
+    <span class="hljs-built_in">CIImage</span> *outputImage;
+    <span class="hljs-keyword">for</span> (<span class="hljs-built_in">CIFilter</span> *filter <span class="hljs-keyword">in</span> filters) {
+        [filter setValue:ciImage forKey:k<span class="hljs-built_in">CIInputImageKey</span>];
+        [filter setDefaults];
+        outputImage = filter<span class="hljs-variable">.outputImage</span>;
+    }
+
+    <span class="hljs-keyword">self</span><span class="hljs-variable">.context</span> = [<span class="hljs-built_in">CIContext</span> contextWithOptions:<span class="hljs-literal">nil</span>];
+    <span class="hljs-built_in">CGImageRef</span> cgImage = [<span class="hljs-keyword">self</span><span class="hljs-variable">.context</span> create<span class="hljs-built_in">CGImage</span>:outputImage fromRect:[outputImage extent]];
+    <span class="hljs-built_in">UIImage</span> *image = [<span class="hljs-built_in">UIImage</span> imageWith<span class="hljs-built_in">CGImage</span>:cgImage];
+    <span class="hljs-built_in">CGImageRelease</span>(cgImage);
+
+    <span class="hljs-keyword">return</span> image;
+}
+</code></pre>
+<h3 id="-">效果图如下:</h3>
+<h6 id="original-">original 原图</h6>
+<p><img src="http://ob9xd51py.bkt.clouddn.com/image_original.png" alt="original"></p>
+<h5 id="photoeffect-">photoEffect 效果图</h5>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">对应滤镜</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">AutoAdjust 自动</td>
+<td style="text-align:center">Instant 怀旧</td>
+<td style="text-align:center">Process  冲印</td>
+</tr>
+<tr>
+<td style="text-align:center">Chrome     铬黄</td>
+<td style="text-align:center">Mono    单色</td>
+<td style="text-align:center">Tonal    色调</td>
+</tr>
+<tr>
+<td style="text-align:center">Fade       褪色</td>
+<td style="text-align:center">Noir    黑白</td>
+<td style="text-align:center">Transfer 岁月</td>
+</tr>
+</tbody>
+</table>
+<p><img src="http://ob9xd51py.bkt.clouddn.com/image_filters.png" alt="Filter"></p>
+<p>附: <a href="https://github.com/withhebing/ImageFilter">demo</a></p>
+<hr>
+<h6 id="-">分享:</h6>
+<ul>
+<li>我一直在用这个: <a href="https://developer.xamarin.com/api/type/CoreImage.CIPhotoEffectNoir/">developer.xamarin.com/api/type/CoreImage</a>, 查看起来比较方便, 除了Core Image还有很多其它框架.  </li>
+<li><a href="https://objccn.io/issues/">ObjC 中国 - 期刊</a>, 讲得都很精当, @onevcat大神等组建; 或者直接去<a href="https://www.objc.io/issues/">objc.io</a>, 不需搭梯子的哦.  </li>
+<li><a href="https://developer.apple.com/library/ios/documentation/GraphicsImaging/Reference/CoreImagingRef/index.html#//apple_ref/doc/uid/TP40001171">Core Image Reference Collection</a> 和 <a href="https://developer.apple.com/library/ios/documentation/GraphicsImaging/Conceptual/CoreImaging/ci_intro/ci_intro.html#//apple_ref/doc/uid/TP30001185">Core Image Programming Guide</a> 是Core Image的官方文档集.  </li>
+<li><a href="https://developer.apple.com/library/ios/documentation/GraphicsImaging/Reference/QuartzCoreFramework/Classes/CIFilter_Class/index.html#//apple_ref/occ/cl/CIFilter">Core Image Filter Reference</a> 包含了Core Image所提供图像滤镜的完整列表以及用法示例.</li>
+</ul>
+<hr>
+<p>ThanksTo:</p>
+<pre><code>[<span class="hljs-number">1</span>]<span class="hljs-symbol">:https</span><span class="hljs-symbol">://developer</span>.apple.com/library/ios/documentation/<span class="hljs-constant">GraphicsImaging/Conceptual/CoreImaging/</span>ci_intro/ci_intro.html<span class="hljs-comment">#//apple_ref/doc/uid/TP30001185 "Core Image Programming Guide"</span>
+[<span class="hljs-number">2</span>]<span class="hljs-symbol">:https</span><span class="hljs-symbol">://objccn</span>.io/issue-<span class="hljs-number">21</span>-<span class="hljs-number">6</span>/ <span class="hljs-string">"Core Image 介绍"</span>
+</code></pre></div><footer class="footer"><address class="author">Copyright &copy;<a rel="author" href="https://github.com/withhebing" class="author-name">withhebing</a>-<a href="https://github.com/withhebing/diary" class="source-repo">Source</a></address><p>Generated by<a href="https://github.com/joyeecheung/diary" class="site-repo">Joyee Cheung&#39;s diary generator</a></p></footer></body></html>

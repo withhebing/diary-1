@@ -1,0 +1,164 @@
+<!DOCTYPE html><!--[if lte IE 8]>
+<html lang="en" class="lte-ie8">
+<![endif]-->
+<!--[if gt IE 8]><!-->
+<html lang="en">
+<!--<![endif]--><head><meta charset="utf-8"><title>2016-08-22 Objective-C isa 指针 与 runtime 机制</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/diary/styles/global.css"><link rel="stylesheet" href="/diary/styles/tomorrow.css"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-63818301-1', 'auto');
+ga('send', 'pageview');</script></head><body><div class="content"><h2 id="objective-c-isa-runtime-">Objective-C isa 指针 与 runtime 机制</h2>
+<h4 id="isa-">isa指针</h4>
+<p>要认识什么是isa指针，我们得先明确一点：</p>
+<p><strong>在Objective-C中，任何类的定义都是对象。类和类的实例（对象）没有任何本质上的区别。任何对象都有isa指针。</strong></p>
+<p>那么什么是类呢？在xcode中用快捷键Shift＋Cmd＋O 打开文件objc.h 能看到类的定义：</p>
+<pre><code class="lang-objc"><span class="hljs-preprocessor">#if !OBJC_TYPES_DEFINED</span>
+<span class="hljs-comment">/// An opaque type that represents an Objective-C class.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_class *Class;
+
+<span class="hljs-comment">/// Represents an instance of a class.</span>
+<span class="hljs-keyword">struct</span> objc_object {
+    Class isa  OBJC_ISA_<span class="hljs-built_in">AVAILABILITY</span>;
+};
+
+<span class="hljs-comment">/// A pointer to an instance of a class.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_object *<span class="hljs-keyword">id</span>;
+<span class="hljs-preprocessor">#endif</span>
+
+<span class="hljs-comment">/// An opaque type that represents a method selector.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_selector *SEL;
+</code></pre>
+<p>可以看出:</p>
+<p><strong>Class 是一个 objc_class 结构类型的指针, id是一个 objc_object 结构类型的指针.</strong></p>
+<p>我们再来看看 objc_class 的定义 (runtime.h中)：</p>
+<pre><code class="lang-objc"><span class="hljs-preprocessor">#if !OBJC_TYPES_DEFINED</span>
+
+<span class="hljs-comment">/// An opaque type that represents a method in a class definition.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_method *Method;
+
+<span class="hljs-comment">/// An opaque type that represents an instance variable.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_ivar *Ivar;
+
+<span class="hljs-comment">/// An opaque type that represents a category.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_category *Category;
+
+<span class="hljs-comment">/// An opaque type that represents an Objective-C declared property.</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_property *objc_property_t;
+
+<span class="hljs-keyword">struct</span> objc_class {
+    Class isa  OBJC_ISA_<span class="hljs-built_in">AVAILABILITY</span>;
+
+<span class="hljs-preprocessor">#if !__OBJC2__</span>
+    Class super_class                                        OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span> *name                                         OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">long</span> version                                             OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">long</span> info                                                OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">long</span> instance_size                                       OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">struct</span> objc_ivar_list *ivars                             OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">struct</span> objc_method_list **methodLists                    OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">struct</span> objc_cache *cache                                 OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+    <span class="hljs-keyword">struct</span> objc_protocol_list *protocols                     OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+<span class="hljs-preprocessor">#endif</span>
+
+} OBJC2_UN<span class="hljs-built_in">AVAILABLE</span>;
+<span class="hljs-comment">/* Use `Class` instead of `struct objc_class *` */</span>
+
+<span class="hljs-preprocessor">#endif</span>
+
+<span class="hljs-preprocessor">#ifdef __OBJC__</span>
+<span class="hljs-class"><span class="hljs-keyword">@class</span> <span class="hljs-title">Protocol</span>;</span>
+<span class="hljs-preprocessor">#else</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> objc_object Protocol;
+<span class="hljs-preprocessor">#endif</span>
+
+<span class="hljs-comment">/// Defines a method</span>
+<span class="hljs-keyword">struct</span> objc_method_description {
+    SEL name;               <span class="hljs-comment">/**&lt; The name of the method */</span>
+    <span class="hljs-keyword">char</span> *types;            <span class="hljs-comment">/**&lt; The types of the method arguments */</span>
+};
+
+<span class="hljs-comment">/// Defines a property attribute</span>
+<span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> {
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span> *name;           <span class="hljs-comment">/**&lt; The name of the attribute */</span>
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span> *value;          <span class="hljs-comment">/**&lt; The value of the attribute (usually empty) */</span>
+} objc_property_attribute_t;
+</code></pre>
+<ul>
+<li>各个参数的意思：</li>
+</ul>
+<blockquote>
+<p>isa：是一个Class 类型的指针. 每个实例对象有个isa的指针, 指向对象的类，而Class里也有个isa的指针, 指向meteClass(元类)。元类保存了类方法的列表。<br>当类方法被调用时，先会从本身查找类方法的实现，如果没有，元类会向他父类查找该方法。同时注意的是：<strong>元类（meteClass）也是类，它也是对象。</strong> 元类也有isa指针,它的isa指针最终指向的是一个根元类(root meteClass).根元类的isa指针指向本身，这样形成了一个封闭的内循环。</p>
+<p>super_class：父类，如果该类已经是最顶层的根类,那么它为NULL。</p>
+<p>version：类的版本信息,默认为0</p>
+<p>info：供运行期使用的一些位标识。</p>
+<p>instance_size：该类的实例变量大小</p>
+<p>ivars：成员变量的数组</p>
+</blockquote>
+<ul>
+<li><p>各个类实例变量的继承关系：
+<img src="http://upload-images.jianshu.io/upload_images/449095-3e972ec16703c54d.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240/q/100" alt=""></p>
+<ul>
+<li><p><strong>每一个对象本质上都是一个类的实例。其中类定义了成员变量和成员方法的列表。对象通过对象的isa指针指向类。</strong></p>
+</li>
+<li><p><strong>每一个类本质上都是一个对象，类其实是元类（meteClass）的实例。元类定义了类方法的列表。类通过类的isa指针指向元类。</strong></p>
+</li>
+<li><p><strong>所有的元类最终继承一个根元类，根元类isa指针指向本身，形成一个封闭的内循环。</strong></p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="runtime-">runtime 机制</h4>
+<ul>
+<li><p>runtime：指一个程序在运行（或者在被执行）的状态。也就是说，当你打开一个程序使它在电脑上运行的时候，那个程序就是处于运行时刻。在一些编程语言中，把某些可以重用的程序或者实例打包或者重建成为“运行库&quot;。这些实例可以在它们运行的时候被连接或者被任何程序调用。</p>
+</li>
+<li><p>objective-c中runtime：是一套比较底层的纯C语言API, 属于1个C语言库, 包含了很多底层的C语言API。 在我们平时编写的OC代码中, 程序运行过程时, 其实最终都是转成了runtime的C语言代码。</p>
+</li>
+<li><p>runtime的应用：</p>
+<ul>
+<li>动态创建一个类(比如KVO的底层实现)</li>
+<li>动态地为某个类添加属性\方法, 修改属性值\方法</li>
+<li>遍历一个类的所有成员变量(属性)\所有方法</li>
+</ul>
+</li>
+</ul>
+<p>实质上，以上的是<strong>通过相关方法来获取对象或者类的isa指针来实现的。</strong></p>
+<p>相关函数:</p>
+<ol>
+<li><p>增加</p>
+<ul>
+<li>增加函数:<code>class_addMethod</code></li>
+<li>增加实例变量:<code>class_addIvar</code></li>
+<li>增加属性:<code>@dynamic</code>标签，或者<code>class_addMethod</code>，因为属性其实就是由getter和setter函数组成</li>
+<li>增加Protocol:<code>class_addProtocol</code> (说实话我真不知道动态增加一个protocol有什么用,-_-!!)</li>
+</ul>
+</li>
+<li><p>获取</p>
+<ul>
+<li>获取函数列表及每个函数的信息(函数指针、函数名等等):<code>class_getClassMethod method_getName ...</code></li>
+<li>获取属性列表及每个属性的信息:<code>class_copyPropertyList</code> property_getName</li>
+<li>获取类本身的信息,如类名等：<code>class_getName class_getInstanceSize</code></li>
+<li>获取变量列表及变量信息：<code>class_copyIvarList</code></li>
+<li>获取变量的值</li>
+</ul>
+</li>
+<li><p>替换</p>
+<ul>
+<li>将实例替换成另一个类：<code>object_setClass</code></li>
+<li>替换类方法的定义：<code>class_replaceMethod</code></li>
+</ul>
+</li>
+<li><p>其他常用方法：</p>
+<ul>
+<li>交换两个方法的实现：<code>method_exchangeImplementations</code>.</li>
+<li>设置一个方法的实现：<code>method_setImplementation</code>.</li>
+</ul>
+</li>
+</ol>
+<p><img src="http://upload-images.jianshu.io/upload_images/449095-aec569427bcb7436.png" alt=""></p>
+<hr>
+<p><img src="http://upload-images.jianshu.io/upload_images/1194882-2c8707760366083b.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt=""></p>
+<hr>
+<p>原文链接：<a href="http://www.jianshu.com/p/41735c66dccb">http://www.jianshu.com/p/41735c66dccb</a></p>
+</div><footer class="footer"><address class="author">Copyright &copy;<a rel="author" href="https://github.com/withhebing" class="author-name">withhebing</a>-<a href="https://github.com/withhebing/diary" class="source-repo">Source</a></address><p>Generated by<a href="https://github.com/joyeecheung/diary" class="site-repo">Joyee Cheung&#39;s diary generator</a></p></footer></body></html>
